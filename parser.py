@@ -43,10 +43,10 @@ class Parser:
                 self.eat(TokenType.LPAREN)
                 args = []
                 if self.current_token.type != TokenType.RPAREN:
-                    args.append(self.expression())
+                    args.append(self.logical_expr())  # Changed to logical_expr
                     while self.current_token.type == TokenType.COMMA:
                         self.eat(TokenType.COMMA)
-                        args.append(self.expression())
+                        args.append(self.logical_expr())
                 self.eat(TokenType.RPAREN)
                 if name in self.structs:
                     return StructInitNode(name, args)
@@ -59,7 +59,7 @@ class Parser:
             return VarNode(name)
         elif token.type == TokenType.LPAREN:
             self.eat(TokenType.LPAREN)
-            result = self.expression()
+            result = self.logical_expr()  # Changed to logical_expr
             self.eat(TokenType.RPAREN)
             return result
         self.error(f"Unexpected token {token.type}")
@@ -110,28 +110,29 @@ class Parser:
 
     def comparison(self) -> Node:
         node = self.expression()
-        while self.current_token.type in (TokenType.EQUAL, TokenType.NOT_EQUAL, 
-                                        TokenType.LESS, TokenType.GREATER,
-                                        TokenType.LESS_EQUAL, TokenType.GREATER_EQUAL):
+        # Handle comparison operators
+        if self.current_token.type in (TokenType.EQUAL, TokenType.NOT_EQUAL, 
+                                     TokenType.LESS, TokenType.GREATER,
+                                     TokenType.LESS_EQUAL, TokenType.GREATER_EQUAL):
             token = self.current_token
             if token.type == TokenType.EQUAL:
                 self.eat(TokenType.EQUAL)
-                node = CompareNode(node, TokenType.EQUAL, self.expression())
+                return CompareNode(node, TokenType.EQUAL, self.expression())
             elif token.type == TokenType.NOT_EQUAL:
                 self.eat(TokenType.NOT_EQUAL)
-                node = CompareNode(node, TokenType.NOT_EQUAL, self.expression())
+                return CompareNode(node, TokenType.NOT_EQUAL, self.expression())
             elif token.type == TokenType.LESS:
                 self.eat(TokenType.LESS)
-                node = CompareNode(node, TokenType.LESS, self.expression())
+                return CompareNode(node, TokenType.LESS, self.expression())
             elif token.type == TokenType.GREATER:
                 self.eat(TokenType.GREATER)
-                node = CompareNode(node, TokenType.GREATER, self.expression())
+                return CompareNode(node, TokenType.GREATER, self.expression())
             elif token.type == TokenType.LESS_EQUAL:
                 self.eat(TokenType.LESS_EQUAL)
-                node = CompareNode(node, TokenType.LESS_EQUAL, self.expression())
+                return CompareNode(node, TokenType.LESS_EQUAL, self.expression())
             elif token.type == TokenType.GREATER_EQUAL:
                 self.eat(TokenType.GREATER_EQUAL)
-                node = CompareNode(node, TokenType.GREATER_EQUAL, self.expression())
+                return CompareNode(node, TokenType.GREATER_EQUAL, self.expression())
         return node
 
     def logical_expr(self) -> Node:
@@ -174,15 +175,26 @@ class Parser:
     def if_stmt(self) -> Node:
         self.eat(TokenType.IF)
         self.eat(TokenType.LPAREN)
-        condition = self.logical_expr()
-        self.eat(TokenType.RPAREN)
+        try:
+            condition = self.logical_expr()
+            if self.current_token.type != TokenType.RPAREN:
+                self.error("Missing closing parenthesis in IF condition")
+            self.eat(TokenType.RPAREN)
+        except Exception as e:
+            # Catch any parsing errors in the condition and re-raise with better message
+            if str(e).startswith("Expected"):
+                self.error("Invalid syntax in IF condition (possibly missing parenthesis)")
+            raise e
+        
         self.eat(TokenType.LBRACE)
         then_block = self.block()
         self.eat(TokenType.RBRACE)
-        self.eat(TokenType.ELSE)
-        self.eat(TokenType.LBRACE)
-        else_block = self.block()
-        self.eat(TokenType.RBRACE)
+        else_block = None
+        if self.current_token.type == TokenType.ELSE:
+            self.eat(TokenType.ELSE)
+            self.eat(TokenType.LBRACE)
+            else_block = self.block()
+            self.eat(TokenType.RBRACE)
         return IfNode(condition, then_block, else_block)
 
     def for_loop(self) -> Node:
@@ -250,8 +262,6 @@ class Parser:
             return None
         elif self.current_token.type == TokenType.STRUCT:
             self.struct_def()
-            if self.current_token.type == TokenType.SEMICOLON:
-                self.eat(TokenType.SEMICOLON)
             return None
         elif self.current_token.type == TokenType.IF:
             stmt = self.if_stmt()
@@ -271,6 +281,7 @@ class Parser:
         elif self.current_token.type == TokenType.ID:
             first_id = self.current_token.value
             self.eat(TokenType.ID)
+            # Handle struct declaration
             if self.current_token.type == TokenType.ID:
                 var_name = self.current_token.value
                 self.eat(TokenType.ID)
@@ -282,35 +293,43 @@ class Parser:
                     return AssignNode(var_name, value)
                 else:
                     self.error(f"Expected '=' after '{first_id} {var_name}'")
+            # Handle regular assignment
             elif self.current_token.type == TokenType.ASSIGN:
                 self.eat(TokenType.ASSIGN)
                 value = self.logical_expr()
                 if self.current_token.type == TokenType.SEMICOLON:
                     self.eat(TokenType.SEMICOLON)
                 return AssignNode(first_id, value)
+            # Handle function call
             elif self.current_token.type == TokenType.LPAREN:
                 self.eat(TokenType.LPAREN)
                 args = []
                 if self.current_token.type != TokenType.RPAREN:
-                    args.append(self.expression())
+                    args.append(self.logical_expr()) 
                     while self.current_token.type == TokenType.COMMA:
                         self.eat(TokenType.COMMA)
-                        args.append(self.expression())
+                        args.append(self.logical_expr())
                 self.eat(TokenType.RPAREN)
                 node = FunctionCallNode(first_id, args)
                 if self.current_token.type == TokenType.SEMICOLON:
                     self.eat(TokenType.SEMICOLON)
                 return node
+            # Handle field access
             elif self.current_token.type == TokenType.DOT:
                 self.eat(TokenType.DOT)
                 field = self.current_token.value
                 self.eat(TokenType.ID)
                 node = FieldAccessNode(first_id, field)
+                # Allow operations after field access
+                if self.current_token.type == TokenType.MULTIPLY:
+                    self.eat(TokenType.MULTIPLY)
+                    right = self.expression()
+                    node = BinOpNode(node, TokenType.MULTIPLY, right)
                 if self.current_token.type == TokenType.SEMICOLON:
                     self.eat(TokenType.SEMICOLON)
                 return node
             else:
-                node = VarNode(first_id)
+                node = self.logical_expr()  # Fall back to logical expression
                 if self.current_token.type == TokenType.SEMICOLON:
                     self.eat(TokenType.SEMICOLON)
                 return node
