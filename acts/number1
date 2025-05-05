@@ -1,0 +1,34 @@
+class SymbolTable:
+    def __init__(self):
+        self.table = {}
+
+    def insert(self, identifier, data_type, value):
+        self.table[identifier] = {"type": data_type, "value": value}
+        print(f"Inserted: {identifier} ({data_type}) = {value}")
+
+    def update(self, identifier, value):
+        if identifier in self.table:
+            self.table[identifier]["value"] = value
+            print(f"Updated: {identifier} = {value}")
+        else:
+            print(f"Error: {identifier} not found in symbol table")
+
+    def delete(self, identifier):
+        if identifier in self.table:
+            del self.table[identifier]
+            print(f"Deleted: {identifier}")
+        else:
+            print(f"Error: {identifier} not found in symbol table")
+
+    def display(self):
+        print("Symbol Table:")
+        for identifier, info in self.table.items():
+            print(f"{identifier}: type={info['type']}, value={info['value']}")
+
+# Test the symbol table
+symbol_table = SymbolTable()
+symbol_table.insert("x", "int", 10)
+symbol_table.insert("y", "float", 3.14)
+symbol_table.update("x", 20)
+symbol_table.delete("y")
+symbol_table.display()

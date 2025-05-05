@@ -1,13 +1,16 @@
 from enum import Enum
-# Token types for our language
+
 class TokenType(Enum):
     IF = 'IF'
     ELSE = 'ELSE'
     FOR = 'FOR'
+    WHILE = 'WHILE'
     DEF = 'DEF'
     RETURN = 'RETURN'
     STRUCT = 'STRUCT'
+    CLASS = 'CLASS'
     PRINT = 'PRINT'
+    INPUT = 'INPUT'
     TRUE = 'TRUE'
     FALSE = 'FALSE'
     AND = 'AND'
@@ -19,7 +22,7 @@ class TokenType(Enum):
     GREATER = 'GREATER'
     LESS_EQUAL = 'LESS_EQUAL'
     GREATER_EQUAL = 'GREATER_EQUAL'
-    ASSIGN = 'ASSIGN'  # =
+    ASSIGN = 'ASSIGN'
     PLUS = 'PLUS'
     MINUS = 'MINUS'
     MULTIPLY = 'MULTIPLY'
@@ -37,3 +40,8 @@ class TokenType(Enum):
     COMMA = 'COMMA'
     SEMICOLON = 'SEMICOLON'
     EOF = 'EOF'
+    COMMENT = 'COMMENT'
+    NULL = 'NULL'
+    DELETE = 'DELETE'
+    ARROW = 'ARROW'
+    PARALLEL = 'PARALLEL'

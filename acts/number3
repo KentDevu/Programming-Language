@@ -1,0 +1,22 @@
+# Global variable
+x = 10
+
+def function_scope():
+    # Local variable
+    y = 20
+    print(f"Inside function: x (global) = {x}, y (local) = {y}")
+    return y
+
+def demonstrate_scope():
+    global x
+    print(f"Before function call: x (global) = {x}")
+    y = function_scope()
+    print(f"After function call: x (global) = {x}")
+    try:
+        print(f"Accessing y outside function: {y}")
+    except NameError:
+        print("Error: y is not accessible here (local scope ended)")
+
+# Test scope and lifetime
+demonstrate_scope()
+print(f"Global x persists: {x}")

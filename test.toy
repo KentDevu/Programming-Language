@@ -1,0 +1,31 @@
+// Test 1: Lexical Analysis - Comments and Basic Tokens // Verifies that comments are skipped and basic tokens are processed let x = 10; // Set x to 10 print(x); // Should print: 10
+
+// Test 2: Syntax Analysis - Valid Syntax // Verifies correct parsing of complex syntax if (x > 5) { print('x is greater than 5'); // Should print: x is greater than 5 }
+
+// Test 3: Syntax Analysis - Invalid Syntax // Should raise a syntax error // if x > 5 { // Missing parentheses
+
+// Test 4: Execution - Arithmetic Expression // Verifies expression evaluation with precedence print(2 * (3 + 4)); // Should print: 14
+
+// Test 5: Execution - While Loop // Verifies while loop functionality let i = 0; while (i < 3) { print(i); // Should print: 0 1 2 i = i + 1; }
+
+// Test 6: Execution - Function Definition and Call // Verifies function execution def square(x) { return x * x; } print(square(5)); // Should print: 25
+
+// Test 7: Execution - Input/Output // Verifies input() function (requires manual input in REPL or test runner) let name = input(); print('Hello, ' + name); // Should print: Hello,
+
+// Test 8: Memory Management - Arrays // Verifies array creation and access let arr = {1, 2, 3}; print(arr); // Should print: [1, 2, 3]
+
+// Test 9: Memory Management - Null // Verifies null assignment let y = null; print(y); // Should print: None
+
+// Test 10: Memory Management - Delete // Verifies delete and use-after-delete prevention let z = 42; delete(z); print(z); // Should raise: Error: Access to deleted variable 'z'
+
+// Test 11: Error Handling - Runtime Error // Verifies division by zero error print(10 / 0); // Should raise: Error: Division by zero
+
+// Test 12: Error Handling - Type Mismatch // Verifies type checking print('hi' + 5); // Should raise: Error: Type mismatch in '+' operation
+
+// Test 13: Advanced Features - Class Definition // Verifies class and method support class Person { name; def greet() { print('Hello'); } } let p = Person(); p.greet(); // Should print: Hello
+
+// Test 14: Advanced Features - Lambda // Verifies lambda function support let add = (x, y) -> x + y; print(add(2, 3)); // Should print: 5
+
+// Test 15: Advanced Features - Parallel Execution // Verifies parallel block execution parallel { print(1); // Should print: 1 } parallel { print(2); // Should print: 2 }
+
+// Test 16: Struct Support // Verifies struct definition and field access struct Point { x, y } let pt = Point(3, 4); print(pt.x); // Should print: 3

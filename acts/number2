@@ -1,0 +1,37 @@
+class TypeChecker:
+    def __init__(self):
+        self.variables = {}
+
+    def declare(self, name, data_type):
+        self.variables[name] = {"type": data_type, "value": None}
+        print(f"Declared: {name} as {data_type}")
+
+    def assign(self, name, value):
+        if name not in self.variables:
+            print(f"Error: {name} not declared")
+            return
+        expected_type = self.variables[name]["type"]
+        actual_type = type(value).__name__
+
+        if (expected_type == "int" and actual_type == "int") or \
+           (expected_type == "float" and actual_type in ["int", "float"]) or \
+           (expected_type == "str" and actual_type == "str"):
+            self.variables[name]["value"] = value
+            print(f"Assigned: {name} = {value} (Valid)")
+        else:
+            print(f"Type Error: Cannot assign {actual_type} to {expected_type}")
+
+    def display(self):
+        print("Variables:")
+        for name, info in self.variables.items():
+            print(f"{name}: type={info['type']}, value={info['value']}")
+
+# Test type checking
+checker = TypeChecker()
+checker.declare("a", "int")
+checker.declare("b", "str")
+checker.assign("a", 42)         # Successful
+checker.assign("a", "hello")    # Unsuccessful
+checker.assign("b", "world")    # Successful
+checker.assign("b", 3.14)       # Unsuccessful
+checker.display()
