@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Toy Language Interpreter</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="icon" href="favicon.ico">
+</head>
+<body class="bg-gray-900 text-white">
+  <div class="min-h-screen p-4">
+    <h1 class="text-2xl font-bold mb-4">Toy Language Interpreter</h1>
+    <div class="flex flex-col md:flex-row gap-4">
+      <!-- Code Editor Section -->
+      <div class="flex-1">
+        <h2 class="text-lg font-semibold mb-2">Code Editor</h2>
+        <textarea
+          id="codeInput"
+          class="w-full h-96 p-2 bg-gray-800 text-white font-mono rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          placeholder="Enter your Toy Language code here..."
+          spellCheck="false"
+        ></textarea>
+        <button
+          id="runButton"
+          class="mt-2 px-4 py-2 rounded-lg font-semibold text-white bg-blue-600 hover:bg-blue-700"
+          onclick="runCode()"
+        >
+          Run Code
+        </button>
+      </div>
+      <!-- Output Section -->
+      <div class="flex-1">
+        <h2 class="text-lg font-semibold mb-2">Output</h2>
+        <pre id="output" class="w-full h-96 p-2 bg-gray-800 text-white font-mono rounded-lg border border-gray-700 overflow-auto">
+          Output will appear here...
+        </pre>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function runCode() {
+      const code = document.getElementById('codeInput').value;
+
+      fetch('/run', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ code: code }),
+      })
+      .then(response => response.json())
+      .then(data => {
+        const outputDiv = document.getElementById('output');
+        if (data.error) {
+          outputDiv.innerHTML = `<span style="color: red;">Error: ${data.error}</span>`;
+        } else {
+          outputDiv.innerHTML = `<pre>${data.output}</pre>`;
+        }
+      })
+      .catch(error => {
+        const outputDiv = document.getElementById('output');
+        outputDiv.innerHTML = `<span style="color: red;">Error: ${error.message}</span>`;
+      });
+    }
+  </script>
+</body>
+</html>
