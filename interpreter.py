@@ -26,10 +26,10 @@ class Interpreter:
 
     def evaluate(self, node: Node) -> Any:
         if self.verbose:
-            logging.debug(f"Evaluating {type(node).__name__}")
+            logging.debug(f"Evaluating {type(node).__name__} at line {node.line}")
         
         if isinstance(node, NumberNode):
-            return node.value
+            return float(node.value)
         elif isinstance(node, StringNode):
             return node.value
         elif isinstance(node, BoolNode):
@@ -37,9 +37,9 @@ class Interpreter:
         elif isinstance(node, NullNode):
             return None
         elif isinstance(node, VarNode):
-            if node.name in self.variables and not self.variables[node.name].get('deleted', False):
-                return self.variables[node.name]['value']
-            raise Exception(f"Access to undefined or deleted variable '{node.name}' at line {node.line}")
+            if node.name not in self.variables or self.variables[node.name].get('deleted', False):
+                raise Exception(f"Access to undefined or deleted variable '{node.name}' at line {node.line}")
+            return self.variables[node.name]['value']
         elif isinstance(node, BinOpNode):
             left = self.evaluate(node.left)
             right = self.evaluate(node.right)
@@ -163,48 +163,54 @@ class Interpreter:
             return result
         elif isinstance(node, FunctionCallNode):
             fname = node.fname
+            args = [self.evaluate(arg) for arg in node.args]
+            if self.verbose:
+                logging.debug(f"Calling function: {fname}, args: {args} at line {node.line}")
             if fname in self.structs:
                 struct_def = self.structs[fname]
-                args = [self.evaluate(arg) for arg in node.args]
                 if len(args) == 0 and len(struct_def.fields) > 0:
                     fields = {field: None for field in struct_def.fields}
                 elif len(struct_def.fields) != len(args):
                     raise Exception(f"Struct '{fname}' expects {len(struct_def.fields)} fields, got {len(args)} at line {node.line}")
                 else:
-                    fields = {field: arg for field, arg in zip(struct_def.fields, args)}
+                    fields = {field: float(arg) if isinstance(arg, (int, float)) else arg for field, arg in zip(struct_def.fields, args)}
                 return StructInstance(fname, fields)
+            if '.' in fname:
+                obj_name, method_name = fname.split('.')
+                if obj_name not in self.variables:
+                    raise Exception(f"Undefined object '{obj_name}' at line {node.line}")
+                obj = self.variables[obj_name]['value']
+                if not isinstance(obj, StructInstance):
+                    raise Exception(f"Variable '{obj_name}' is not a struct at line {node.line}")
+                method_key = f"{obj.struct_name}.{method_name}"
+                if method_key not in self.functions:
+                    raise Exception(f"Method '{method_name}' not found in struct '{obj.struct_name}' at line {node.line}")
+                func = self.functions[method_key]
+                if len(func.params) != len(args):
+                    raise Exception(f"Method '{method_name}' expects {len(func.params)} arguments, got {len(args)} at line {node.line}")
+                saved_vars = self.variables.copy()
+                for param, arg in zip(func.params, args):
+                    self.variables[param] = {'value': arg, 'deleted': False}
+                result = self.evaluate(func.body)
+                self.variables = saved_vars
+                return result if result is not None else None
             if fname not in self.functions:
-                if '.' in fname:
-                    obj_name, method_name = fname.split('.')
-                    if obj_name in self.variables:
-                        obj = self.variables[obj_name]['value']
-                        if isinstance(obj, StructInstance) and f"{obj.struct_name}.{method_name}" in self.functions:
-                            fname = f"{obj.struct_name}.{method_name}"
-                        else:
-                            raise Exception(f"Invalid method call '{fname}' at line {node.line}")
-                    else:
-                        raise Exception(f"Undefined object '{obj_name}' at line {node.line}")
-                else:
-                    if fname in self.variables and callable(self.variables[fname]['value']):
-                        func = self.variables[fname]['value']
-                        args = [self.evaluate(arg) for arg in node.args]
-                        return func(*args)
-                    raise Exception(f"Undefined function '{fname}' at line {node.line}")
+                if fname in self.variables and callable(self.variables[fname]['value']):
+                    func = self.variables[fname]['value']
+                    return func(*args)
+                raise Exception(f"Undefined function '{fname}' at line {node.line}")
             func = self.functions[fname]
-            args = [self.evaluate(arg) for arg in node.args]
             if len(func.params) != len(args):
                 raise Exception(f"Function '{fname}' expects {len(func.params)} arguments, got {len(args)} at line {node.line}")
-            
             saved_vars = self.variables.copy()
             for param, arg in zip(func.params, args):
                 self.variables[param] = {'value': arg, 'deleted': False}
-            
             result = self.evaluate(func.body)
-            if isinstance(result, ReturnNode):
-                result = self.evaluate(result.expr) if result.expr else None
-            
             self.variables = saved_vars
-            return result
+            return result if result is not None else None
+        elif isinstance(node, FunctionDefNode):
+            self.functions[node.fname] = Function(node.params, node.body)
+            return None
         elif isinstance(node, LambdaNode):
             def lambda_func(*args):
                 if len(node.params) != len(args):
@@ -223,14 +229,18 @@ class Interpreter:
                 raise Exception(f"Undefined struct '{node.struct_name}' at line {node.line}")
             struct_def = self.structs[node.struct_name]
             args = [self.evaluate(arg) for arg in node.args]
+            if self.verbose:
+                logging.debug(f"Initializing struct {node.struct_name} with args: {args} at line {node.line}")
             if len(args) == 0 and len(struct_def.fields) > 0:
                 fields = {field: None for field in struct_def.fields}
             elif len(struct_def.fields) != len(args):
                 raise Exception(f"Struct '{node.struct_name}' expects {len(struct_def.fields)} fields, got {len(args)} at line {node.line}")
             else:
-                fields = {field: arg for field, arg in zip(struct_def.fields, args)}
+                fields = {field: float(arg) if isinstance(arg, (int, float)) else arg for field, arg in zip(struct_def.fields, args)}
             return StructInstance(node.struct_name, fields)
         elif isinstance(node, FieldAccessNode):
+            if self.verbose:
+                logging.debug(f"Accessing field: {node.obj_name}.{node.field} at line {node.line}")
             if node.obj_name not in self.variables:
                 raise Exception(f"Undefined variable '{node.obj_name}' at line {node.line}")
             obj = self.variables[node.obj_name]['value']
@@ -238,7 +248,10 @@ class Interpreter:
                 raise Exception(f"Variable '{node.obj_name}' is not a struct at line {node.line}")
             if node.field not in obj.fields:
                 raise Exception(f"Field '{node.field}' not found in struct '{obj.struct_name}' at line {node.line}")
-            return obj.fields[node.field]
+            value = obj.fields[node.field]
+            if self.verbose:
+                logging.debug(f"Field value: {value} at line {node.line}")
+            return float(value) if isinstance(value, (int, float)) else value
         elif isinstance(node, PrintNode):
             value = self.evaluate(node.expr)
             self.printed_values.append(str(value))

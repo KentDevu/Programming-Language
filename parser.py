@@ -44,9 +44,12 @@ class Parser:
 
     def eat(self, token_type: TokenType):
         if self.current_token.type == token_type:
+            if self.verbose:
+                logging.debug(f"Consuming token: {self.current_token}")
             self.current_token = self.lexer.get_next_token()
         else:
-            raise Exception(f"Expected {token_type}, got {self.current_token.type} at line {self.current_token.line}, column {self.current_token.column}")
+            logging.error(f"Token mismatch: Expected {token_type}, got {self.current_token.type} (value: {self.current_token.value}, token: {self.current_token})")
+            raise Exception(f"Expected {token_type}, got {self.current_token.type} (value: {self.current_token.value}) at line {self.current_token.line}, column {self.current_token.column}")
 
     def parse(self) -> List[Node]:
         statements = []
@@ -91,18 +94,27 @@ class Parser:
     def assign_or_call(self) -> Node:
         line = self.current_token.line
         var_name = self.current_token.value
+        if self.verbose:
+            logging.debug(f"Processing ID: {var_name} at line {line}")
         self.eat(TokenType.ID)
         if self.current_token.type == TokenType.ASSIGN:
             self.eat(TokenType.ASSIGN)
             value = self.expr()
-            self.variables[var_name] = value
             return AssignNode(var_name, value, line)
         elif self.current_token.type == TokenType.DOT:
             self.eat(TokenType.DOT)
+            if self.current_token.type != TokenType.ID:
+                raise Exception(f"Expected ID after DOT, got {self.current_token.type} at line {self.current_token.line}, column {self.current_token.column}")
             field = self.current_token.value
+            field_line = self.current_token.line
+            field_column = self.current_token.column
             self.eat(TokenType.ID)
             if self.current_token.type == TokenType.LPAREN:
+                if self.verbose:
+                    logging.debug(f"Creating FunctionCallNode for {var_name}.{field} at line {line}")
                 return self.function_call(f"{var_name}.{field}", line)
+            if self.verbose:
+                logging.debug(f"Creating FieldAccessNode for {var_name}.{field} at line {line}")
             return FieldAccessNode(var_name, field, line)
         elif self.current_token.type == TokenType.LPAREN:
             return self.function_call(var_name, line)
@@ -127,7 +139,7 @@ class Parser:
         body = self.block()
         self.eat(TokenType.RBRACE)
         self.functions[fname] = Function(params, body)
-        return BlockNode([], line)
+        return FunctionDefNode(fname, params, body, line)
 
     def struct_def(self) -> Node:
         line = self.current_token.line
@@ -159,9 +171,9 @@ class Parser:
             if self.current_token.type == TokenType.DEF:
                 method = self.function_def()
                 methods.append(method)
-                fname = method.statements[0].fname if method.statements else None
-                if fname:
-                    self.functions[f"{class_name}.{fname}"] = self.functions[fname]
+                fname = method.fname
+                self.functions[f"{class_name}.{fname}"] = self.functions[fname]
+                del self.functions[fname]
             else:
                 fields.append(self.current_token.value)
                 self.eat(TokenType.ID)
@@ -194,11 +206,11 @@ class Parser:
         line = self.current_token.line
         self.eat(TokenType.FOR)
         self.eat(TokenType.LPAREN)
-        init = self.let_stmt() if self.current_token.value == 'let' else self.expr()
+        init = self.let_stmt() if self.current_token.value == 'let' else self.statement()
         self.eat(TokenType.SEMICOLON)
         condition = self.expr()
         self.eat(TokenType.SEMICOLON)
-        update = self.expr()
+        update = self.statement()
         self.eat(TokenType.RPAREN)
         self.eat(TokenType.LBRACE)
         body = self.block()
@@ -249,14 +261,13 @@ class Parser:
 
     def let_stmt(self) -> Node:
         line = self.current_token.line
-        self.eat(TokenType.ID)  # 'let'
+        self.eat(TokenType.ID)
         var_name = self.current_token.value
         self.eat(TokenType.ID)
         self.eat(TokenType.ASSIGN)
         if self.current_token.type == TokenType.INPUT:
             return AssignNode(var_name, self.input_stmt(), line)
         value = self.expr()
-        self.variables[var_name] = value
         return AssignNode(var_name, value, line)
 
     def input_stmt(self) -> Node:
@@ -286,18 +297,33 @@ class Parser:
             op = self.current_token.type
             self.eat(TokenType.OR)
             right = self.logical_and()
+            if self.verbose:
+                logging.debug(f"Creating LogicalNode with OR at line {line}")
             node = LogicalNode(op, node, right, line)
         return node
 
     def logical_and(self) -> Node:
-        node = self.equality()
+        node = self.logical_not()
         while self.current_token.type == TokenType.AND:
             line = self.current_token.line
             op = self.current_token.type
             self.eat(TokenType.AND)
-            right = self.equality()
+            right = self.logical_not()
+            if self.verbose:
+                logging.debug(f"Creating LogicalNode with AND at line {line}")
             node = LogicalNode(op, node, right, line)
         return node
+
+    def logical_not(self) -> Node:
+        line = self.current_token.line
+        if self.current_token.type == TokenType.NOT:
+            op = self.current_token.type
+            self.eat(TokenType.NOT)
+            operand = self.logical_not()
+            if self.verbose:
+                logging.debug(f"Creating UnaryOpNode with NOT at line {line}")
+            return UnaryOpNode(op, operand, line)
+        return self.equality()
 
     def equality(self) -> Node:
         node = self.comparison()
@@ -306,6 +332,8 @@ class Parser:
             op = self.current_token.type
             self.eat(op)
             right = self.comparison()
+            if self.verbose:
+                logging.debug(f"Creating CompareNode with {op} at line {line}")
             node = CompareNode(op, node, right, line)
         return node
 
@@ -316,6 +344,8 @@ class Parser:
             op = self.current_token.type
             self.eat(op)
             right = self.term()
+            if self.verbose:
+                logging.debug(f"Creating CompareNode with {op} at line {line}")
             node = CompareNode(op, node, right, line)
         return node
 
@@ -326,6 +356,8 @@ class Parser:
             op = self.current_token.type
             self.eat(op)
             right = self.factor()
+            if self.verbose:
+                logging.debug(f"Creating BinOpNode with {op} at line {line}")
             node = BinOpNode(op, node, right, line)
         return node
 
@@ -336,6 +368,8 @@ class Parser:
             op = self.current_token.type
             self.eat(op)
             right = self.exponent()
+            if self.verbose:
+                logging.debug(f"Creating BinOpNode with {op} at line {line}")
             node = BinOpNode(op, node, right, line)
         return node
 
@@ -346,22 +380,35 @@ class Parser:
             op = self.current_token.type
             self.eat(TokenType.EXPONENTIATION)
             right = self.unary()
+            if self.verbose:
+                logging.debug(f"Creating BinOpNode with {op} at line {line}")
             node = BinOpNode(op, node, right, line)
         return node
 
     def unary(self) -> Node:
         line = self.current_token.line
-        if self.current_token.type in [TokenType.PLUS, TokenType.MINUS, TokenType.NOT]:
+        if self.current_token.type in [TokenType.PLUS, TokenType.MINUS]:
             op = self.current_token.type
             self.eat(op)
-            return UnaryOpNode(op, self.unary(), line)
+            operand = self.unary()
+            if self.verbose:
+                logging.debug(f"Creating UnaryOpNode with {op} at line {line}")
+            return UnaryOpNode(op, operand, line)
         return self.primary()
 
     def primary(self) -> Node:
         token = self.current_token
+        if self.verbose:
+            logging.debug(f"Parsing primary token: {token}")
         if token.type == TokenType.NUMBER:
             self.eat(TokenType.NUMBER)
-            return NumberNode(token.value, token.line)
+            try:
+                value = float(token.value)
+                if self.verbose:
+                    logging.debug(f"Created NumberNode: value={value}")
+                return NumberNode(value, token.line)
+            except ValueError:
+                raise Exception(f"Invalid number format '{token.value}' at line {token.line}, column {token.column}")
         elif token.type == TokenType.STRING:
             self.eat(TokenType.STRING)
             return StringNode(token.value, token.line)
@@ -375,19 +422,36 @@ class Parser:
             self.eat(TokenType.NULL)
             return NullNode(token.line)
         elif token.type == TokenType.ID:
+            var_name = token.value
+            reserved_keywords = ['and', 'or', 'not', 'if', 'else', 'for', 'while', 'def', 'return', 'struct', 'class', 'print', 'true', 'false', 'null', 'delete', 'parallel', 'input']
+            if var_name in reserved_keywords:
+                raise Exception(f"Unexpected reserved keyword '{var_name}' used as identifier at line {token.line}, column {token.column}")
             self.eat(TokenType.ID)
             if self.current_token.type == TokenType.LPAREN:
-                return self.function_call(token.value, token.line)
+                if self.verbose:
+                    logging.debug(f"Creating FunctionCallNode for {var_name}")
+                return self.function_call(var_name, token.line)
             elif self.current_token.type == TokenType.DOT:
                 self.eat(TokenType.DOT)
+                if self.current_token.type != TokenType.ID:
+                    raise Exception(f"Expected ID after DOT, got {self.current_token.type} at line {self.current_token.line}, column {self.current_token.column}")
                 field = self.current_token.value
+                field_line = self.current_token.line
+                field_column = self.current_token.column
                 self.eat(TokenType.ID)
                 if self.current_token.type == TokenType.LPAREN:
-                    return self.function_call(f"{token.value}.{field}", token.line)
-                return FieldAccessNode(token.value, field, token.line)
+                    fname = f"{var_name}.{field}"
+                    if self.verbose:
+                        logging.debug(f"Creating FunctionCallNode for {fname} at line {token.line}")
+                    return self.function_call(fname, token.line)
+                if self.verbose:
+                    logging.debug(f"Creating FieldAccessNode for {var_name}.{field} at line {token.line}")
+                return FieldAccessNode(var_name, field, token.line)
             elif self.current_token.type == TokenType.LBRACE:
-                return self.array_or_struct(token.value, token.line)
-            return VarNode(token.value, token.line)
+                return self.array_or_struct(var_name, token.line)
+            if self.verbose:
+                logging.debug(f"Creating VarNode for {var_name}")
+            return VarNode(var_name, token.line)
         elif token.type == TokenType.LPAREN:
             self.eat(TokenType.LPAREN)
             if self.current_token.type == TokenType.ID and self.current_token.value not in self.functions:
@@ -402,6 +466,8 @@ class Parser:
         raise Exception(f"Unexpected token {token.type} at line {token.line}, column {token.column}")
 
     def function_call(self, fname: str, line: int) -> Node:
+        if self.verbose:
+            logging.debug(f"Processing function call: {fname} at line {line}")
         self.eat(TokenType.LPAREN)
         args = []
         if self.current_token.type != TokenType.RPAREN:
@@ -411,7 +477,11 @@ class Parser:
                 args.append(self.expr())
         self.eat(TokenType.RPAREN)
         if fname in self.structs:
+            if self.verbose:
+                logging.debug(f"Creating StructInitNode for {fname} at line {line}")
             return StructInitNode(fname, args, line)
+        if self.verbose:
+            logging.debug(f"Created FunctionCallNode: fname={fname}, args={len(args)} at line {line}")
         return FunctionCallNode(fname, args, line)
 
     def lambda_expr(self, line: int) -> Node:

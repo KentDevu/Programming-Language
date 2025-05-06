@@ -30,15 +30,32 @@ class Lexer:
 
     def get_number(self):
         result = ''
-        while self.current_char is not None and (self.current_char.isdigit() or self.current_char == '.'):
-            if result.count('.') > 1:
-                raise Exception(f"Invalid number format at line {self.line}, column {self.column}")
+        has_dot = False
+        start_line = self.line
+        start_column = self.column
+
+        # Handle optional leading minus
+        if self.current_char == '-':
             result += self.current_char
             self.advance()
+
+        # Collect digits and at most one dot
+        while self.current_char is not None and (self.current_char.isdigit() or self.current_char == '.'):
+            if self.current_char == '.':
+                if has_dot:
+                    raise Exception(f"Invalid number format: multiple dots at line {self.line}, column {self.column}")
+                has_dot = True
+            result += self.current_char
+            self.advance()
+
+        # Ensure the result is a valid number
+        if not result or result == '-' or result == '-.' or result == '.':
+            raise Exception(f"Invalid number format '{result}' at line {start_line}, column {start_column}")
+
         try:
             return float(result)
         except ValueError:
-            raise Exception(f"Invalid number format at line {self.line}, column {self.column}")
+            raise Exception(f"Invalid number format '{result}' at line {start_line}, column {start_column}")
 
     def get_string(self):
         result = ''
@@ -72,7 +89,7 @@ class Lexer:
                 self.skip_comment()
                 continue
 
-            if self.current_char.isdigit() or self.current_char == '.':
+            if self.current_char.isdigit() or (self.current_char == '-' and self.pos + 1 < len(self.text) and self.text[self.pos + 1].isdigit()):
                 value = self.get_number()
                 token = Token(TokenType.NUMBER, value, self.line, self.column)
                 logging.debug(f"Token: {token}")
@@ -86,41 +103,42 @@ class Lexer:
 
             if self.current_char.isalpha() or self.current_char == '_':
                 value = self.get_id()
-                if value == 'if':
+                value_lower = value.lower()  # Case-insensitive comparison
+                if value_lower == 'if':
                     token = Token(TokenType.IF, value, self.line, self.column)
-                elif value == 'else':
+                elif value_lower == 'else':
                     token = Token(TokenType.ELSE, value, self.line, self.column)
-                elif value == 'for':
+                elif value_lower == 'for':
                     token = Token(TokenType.FOR, value, self.line, self.column)
-                elif value == 'while':
+                elif value_lower == 'while':
                     token = Token(TokenType.WHILE, value, self.line, self.column)
-                elif value == 'def':
+                elif value_lower == 'def':
                     token = Token(TokenType.DEF, value, self.line, self.column)
-                elif value == 'return':
+                elif value_lower == 'return':
                     token = Token(TokenType.RETURN, value, self.line, self.column)
-                elif value == 'struct':
+                elif value_lower == 'struct':
                     token = Token(TokenType.STRUCT, value, self.line, self.column)
-                elif value == 'class':
+                elif value_lower == 'class':
                     token = Token(TokenType.CLASS, value, self.line, self.column)
-                elif value == 'print':
+                elif value_lower == 'print':
                     token = Token(TokenType.PRINT, value, self.line, self.column)
-                elif value == 'true':
+                elif value_lower == 'true':
                     token = Token(TokenType.TRUE, value, self.line, self.column)
-                elif value == 'false':
+                elif value_lower == 'false':
                     token = Token(TokenType.FALSE, value, self.line, self.column)
-                elif value == 'and':
+                elif value_lower == 'and':
                     token = Token(TokenType.AND, value, self.line, self.column)
-                elif value == 'or':
+                elif value_lower == 'or':
                     token = Token(TokenType.OR, value, self.line, self.column)
-                elif value == 'not':
+                elif value_lower == 'not':
                     token = Token(TokenType.NOT, value, self.line, self.column)
-                elif value == 'null':
+                elif value_lower == 'null':
                     token = Token(TokenType.NULL, None, self.line, self.column)
-                elif value == 'delete':
+                elif value_lower == 'delete':
                     token = Token(TokenType.DELETE, value, self.line, self.column)
-                elif value == 'parallel':
+                elif value_lower == 'parallel':
                     token = Token(TokenType.PARALLEL, value, self.line, self.column)
-                elif value == 'input':
+                elif value_lower == 'input':
                     token = Token(TokenType.INPUT, value, self.line, self.column)
                 else:
                     token = Token(TokenType.ID, value, self.line, self.column)

@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Toy Language Interpreter</title>
+  <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.development.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="icon" href="favicon.ico">
+</head>
+<body class="bg-gray-900 text-white">
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState } = React;
+    const { createRoot } = ReactDOM;
+
+    function App() {
+      const [code, setCode] = useState(`let x = 10;\nprint(x);\n`);
+      const [output, setOutput] = useState('');
+      const [isRunning, setIsRunning] = useState(false);
+
+      const runCode = async () => {
+        setIsRunning(true);
+        setOutput('');
+        try {
+          const response = await axios.post('http://localhost:8000/run', { code });
+          setOutput(response.data.output);
+        } catch (error) {
+          setOutput(`Error: ${error.response?.data?.error || error.message}`);
+        } finally {
+          setIsRunning(false);
+        }
+      };
+
+      return (
+        <div className="min-h-screen p-4">
+          <h1 className="text-2xl font-bold mb-4">Toy Language Interpreter</h1>
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex-1">
+              <h2 className="text-lg font-semibold mb-2">Code Editor</h2>
+              <textarea
+                className="w-full h-96 p-2 bg-gray-800 text-white font-mono rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                placeholder="Enter your Toy Language code here..."
+                spellCheck="false"
+              />
+              <button
+                className={`mt-2 px-4 py-2 rounded-lg font-semibold text-white ${
+                  isRunning ? 'bg-gray-600 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
+                }`}
+                onClick={runCode}
+                disabled={isRunning}
+              >
+                {isRunning ? 'Running...' : 'Run Code'}
+              </button>
+            </div>
+            <div className="flex-1">
+              <h2 className="text-lg font-semibold mb-2">Output</h2>
+              <pre className="w-full h-96 p-2 bg-gray-800 text-white font-mono rounded-lg border border-gray-700 overflow-auto">
+                {output || 'Output will appear here...'}
+              </pre>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    const root = createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
