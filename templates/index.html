@@ -68,8 +68,8 @@
   <script>
     let inputResolve = null;
     let isRunning = false;
+    let sessionId = null;
 
-    // Show input modal and return a promise that resolves with the input
     function promptInput() {
       return new Promise((resolve, reject) => {
         const modal = document.getElementById('inputModal');
@@ -108,54 +108,80 @@
         submitButton.addEventListener('click', submitHandler);
         cancelButton.addEventListener('click', cancelHandler);
         inputField.addEventListener('keypress', keypressHandler);
-
-        inputResolve = resolve;
       });
     }
 
     async function runCode() {
       const code = document.getElementById('codeInput').value;
       const outputDiv = document.getElementById('output');
+      const runButton = document.getElementById('runButton');
 
       if (isRunning) {
-        // Terminate the running program
         isRunning = false;
         outputDiv.innerHTML = `<pre>Program terminated.</pre>`;
-        const modal = document.getElementById('inputModal');
-        modal.classList.add('hidden');
+        document.getElementById('inputModal').classList.add('hidden');
+        runButton.textContent = 'Run Code';
+        sessionId = null;
         return;
       }
 
       isRunning = true;
+      runButton.textContent = 'Stop';
       outputDiv.innerHTML = `<pre>Running...</pre>`;
+      sessionId = sessionId || null;
 
       try {
-        const response = await fetch('/run', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ code: code }),
-        });
-        const data = await response.json();
-        if (isRunning) {
+        while (isRunning) {
+          const response = await fetch('/run', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code: code, session_id: sessionId })
+          });
+          const data = await response.json();
+          sessionId = data.session_id;
+
           if (data.error) {
             outputDiv.innerHTML = `<span style="color: red;">Error: ${data.error}</span>`;
-          } else {
-            outputDiv.innerHTML = `<pre>${data.output}</pre>`;
+            break;
+          }
+
+          outputDiv.innerHTML = `<pre>${data.output || ''}</pre>`;
+
+          if (data.status === 'input_required') {
+            try {
+              const userInput = await promptInput();
+              const inputResponse = await fetch('/submit_input', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ session_id: sessionId, input: userInput })
+              });
+              const inputData = await inputResponse.json();
+              sessionId = inputData.session_id;
+
+              if (inputData.error) {
+                outputDiv.innerHTML = `<span style="color: red;">Error: ${inputData.error}</span>`;
+                break;
+              }
+
+              outputDiv.innerHTML = `<pre>${inputData.output || ''}</pre>`;
+              if (inputData.status === 'complete') {
+                break;
+              }
+            } catch (error) {
+              outputDiv.innerHTML = `<span style="color: red;">Error: Input cancelled</span>`;
+              break;
+            }
+          } else if (data.status === 'complete') {
+            break;
           }
         }
       } catch (error) {
-        if (isRunning) {
-          outputDiv.innerHTML = `<span style="color: red;">Error: ${error.message}</span>`;
-        }
+        outputDiv.innerHTML = `<span style="color: red;">Error: ${error.message}</span>`;
       } finally {
         isRunning = false;
+        runButton.textContent = 'Run Code';
       }
     }
-
-    // Expose promptInput to the backend
-    window.promptInput = promptInput;
   </script>
 </body>
 </html>

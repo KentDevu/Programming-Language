@@ -40,7 +40,7 @@ class Parser:
 
     def log_ast(self, node: Node):
         if self.verbose:
-            logging.debug(f"AST Node: {type(node).__name__}")
+            logging.debug(f"AST Node: {type(node).__name__}, Line: {node.line}")
 
     def eat(self, token_type: TokenType):
         if self.current_token.type == token_type:
@@ -139,6 +139,8 @@ class Parser:
         body = self.block()
         self.eat(TokenType.RBRACE)
         self.functions[fname] = Function(params, body)
+        if self.verbose:
+            logging.debug(f"Defined function {fname} with params {params}")
         return FunctionDefNode(fname, params, body, line)
 
     def struct_def(self) -> Node:
@@ -157,7 +159,7 @@ class Parser:
                 self.eat(TokenType.ID)
         self.eat(TokenType.RBRACE)
         self.structs[struct_name] = StructDef(fields)
-        return BlockNode([], line)
+        return StructDefNode(struct_name, fields, line)
 
     def class_def(self) -> Node:
         line = self.current_token.line
@@ -174,6 +176,8 @@ class Parser:
                 fname = method.fname
                 self.functions[f"{class_name}.{fname}"] = self.functions[fname]
                 del self.functions[fname]
+                if self.verbose:
+                    logging.debug(f"Registered method {class_name}.{fname}")
             else:
                 fields.append(self.current_token.value)
                 self.eat(TokenType.ID)
@@ -181,7 +185,7 @@ class Parser:
                     self.eat(self.current_token.type)
         self.eat(TokenType.RBRACE)
         self.structs[class_name] = StructDef(fields)
-        return BlockNode([], line)
+        return StructDefNode(class_name, fields, line)
 
     def if_stmt(self) -> Node:
         line = self.current_token.line

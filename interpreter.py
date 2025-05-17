@@ -5,6 +5,16 @@ from token_type import TokenType
 from function import Function
 from structs import StructDef, StructInstance
 from concurrent.futures import ThreadPoolExecutor
+import sys
+
+# Increase recursion limit for small recursive functions
+sys.setrecursionlimit(10000)
+
+# Custom exception to signal input is needed
+class InputRequired(Exception):
+    def __init__(self, line: int):
+        self.line = line
+        super().__init__("Input required")
 
 class ParallelExecutor:
     def __init__(self, interpreter: 'Interpreter', block: BlockNode):
@@ -21,8 +31,12 @@ class Interpreter:
         self.structs: dict = {}
         self.printed_values: List[Any] = []
         self.verbose = verbose
+        self.input_value = None
         if verbose:
             logging.basicConfig(level=logging.DEBUG)
+
+    def set_input(self, value: str):
+        self.input_value = value
 
     def evaluate(self, node: Node) -> Any:
         if self.verbose:
@@ -43,7 +57,6 @@ class Interpreter:
         elif isinstance(node, BinOpNode):
             left = self.evaluate(node.left)
             right = self.evaluate(node.right)
-            
             if node.op == TokenType.PLUS:
                 if isinstance(left, (int, float)) and isinstance(right, (int, float)):
                     return left + right
@@ -139,9 +152,9 @@ class Interpreter:
             self.evaluate(node.init)
             while self.evaluate(node.condition):
                 result = self.evaluate(node.body)
-                self.evaluate(node.update)
-                if result is not None and isinstance(result, ReturnNode):
+                if isinstance(result, ReturnNode):
                     return self.evaluate(result.expr) if result.expr else None
+                self.evaluate(node.update)
             return None
         elif isinstance(node, WhileNode):
             while True:
@@ -151,16 +164,17 @@ class Interpreter:
                 if not condition:
                     break
                 result = self.evaluate(node.body)
-                if result is not None and isinstance(result, ReturnNode):
+                if isinstance(result, ReturnNode):
                     return self.evaluate(result.expr) if result.expr else None
             return None
         elif isinstance(node, BlockNode):
-            result = None
             for stmt in node.statements:
                 result = self.evaluate(stmt)
                 if isinstance(result, ReturnNode):
                     return self.evaluate(result.expr) if result.expr else None
-            return result
+                if result is not None:
+                    return result
+            return None
         elif isinstance(node, FunctionCallNode):
             fname = node.fname
             args = [self.evaluate(arg) for arg in node.args]
@@ -191,8 +205,11 @@ class Interpreter:
                 saved_vars = self.variables.copy()
                 for param, arg in zip(func.params, args):
                     self.variables[param] = {'value': arg, 'deleted': False}
+                self.variables[obj_name] = {'value': obj, 'deleted': False}
                 result = self.evaluate(func.body)
                 self.variables = saved_vars
+                if isinstance(result, ReturnNode):
+                    return self.evaluate(result.expr) if result.expr else None
                 return result if result is not None else None
             if fname not in self.functions:
                 if fname in self.variables and callable(self.variables[fname]['value']):
@@ -207,9 +224,14 @@ class Interpreter:
                 self.variables[param] = {'value': arg, 'deleted': False}
             result = self.evaluate(func.body)
             self.variables = saved_vars
+            if isinstance(result, ReturnNode):
+                return self.evaluate(result.expr) if result.expr else None
             return result if result is not None else None
         elif isinstance(node, FunctionDefNode):
             self.functions[node.fname] = Function(node.params, node.body)
+            return None
+        elif isinstance(node, StructDefNode):
+            self.structs[node.struct_name] = StructDef(node.fields)
             return None
         elif isinstance(node, LambdaNode):
             def lambda_func(*args):
@@ -220,6 +242,8 @@ class Interpreter:
                     self.variables[param] = {'value': arg, 'deleted': False}
                 result = self.evaluate(node.body)
                 self.variables = saved_vars
+                if isinstance(result, ReturnNode):
+                    return self.evaluate(result.expr) if result.expr else None
                 return result
             return lambda_func
         elif isinstance(node, ArrayNode):
@@ -266,7 +290,14 @@ class Interpreter:
                 pool.submit(executor.execute)
             return None
         elif isinstance(node, InputNode):
-            return input("Input: ")
+            if self.input_value is None:
+                raise InputRequired(node.line)
+            value = self.input_value
+            self.input_value = None
+            try:
+                return float(value)
+            except ValueError:
+                return value
         elif isinstance(node, ReturnNode):
             return self.evaluate(node.expr) if node.expr else None
         raise Exception(f"Unknown node type {type(node).__name__} at line {node.line}")

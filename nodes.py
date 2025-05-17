@@ -118,6 +118,12 @@ class StructInitNode(Node):
         self.struct_name = struct_name
         self.args = args
 
+class StructDefNode(Node):
+    def __init__(self, struct_name: str, fields: List[str], line: int):
+        super().__init__(line)
+        self.struct_name = struct_name
+        self.fields = fields
+
 class FieldAccessNode(Node):
     def __init__(self, obj_name: str, field: str, line: int):
         super().__init__(line)
@@ -147,7 +153,6 @@ class ReturnNode(Node):
     def __init__(self, expr: Optional['Node'], line: int):
         super().__init__(line)
         self.expr = expr
-        
 
 class FieldAssignNode(Node):
     def __init__(self, var_name: str, field: str, value: 'Node', line: int):
